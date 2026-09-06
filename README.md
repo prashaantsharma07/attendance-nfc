@@ -24,17 +24,18 @@ Everything below assumes your cards passed that check.
 
 - **Class list** — create classes, glass-card list, tap to open.
 - **Class detail** — "Mark Today's Attendance" button + a live attendance
-  summary table (present/total sessions, %, color-coded by threshold).
-- **NFC scan screen** — continuous scan loop: tap card → looks up by UID →
-  marks present (or flags "already marked today") → shows a running log.
-  Unknown card → routes to registration.
-- **Student registration** — captures name + roll no. for a new card, then
-  immediately marks that student present.
-- **Local persistence** — Room database (`attendance.db`), no server. A
+  summary table (present/total sessions, %, color-coded by threshold, and identifier badges).
+- **Dual NFC & Barcode/QR scan screen** — continuous scan loop:
+  - **NFC Tap**: tap card against phone → looks up by UID → marks present.
+  - **Camera Barcode/QR Scanner**: live CameraX + on-device Google ML Kit scanner with animated viewfinder reticle, debounce, torch toggle, haptic vibration, and audio beep confirmation.
+  - Unknown card or barcode → routes directly to registration.
+  - Manual entry dialogs for both NFC and Barcode testing.
+- **Student registration** — captures name + roll no. and links an NFC card UID, a Barcode/QR ID, or both, then immediately marks that student present.
+- **Local persistence & Migration** — Room database (`attendance.db`) v2 with automated migration script. A
   student registers once and can be marked across multiple classes (roster
   is global, not per-class — flag it if you need isolated per-class rosters).
 - Duplicate-scan protection: a unique DB constraint on
-  (class, student, date) means tapping the same card twice in one session
+  (class, student, date) means tapping or scanning the same person twice in one session
   can't inflate the count.
 
 ## Not implemented (scope cuts made to ship something coherent)

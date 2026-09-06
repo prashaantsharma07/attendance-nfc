@@ -1,5 +1,6 @@
 package com.attendance.nfc.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -151,7 +152,7 @@ fun ClassDetailScreen(
             if (summary.isEmpty()) {
                 GlassCard {
                     Text(
-                        "No students registered yet. Mark attendance once to add the first one via a card scan.",
+                        "No students registered yet. Mark attendance once to add the first one via an NFC card or Barcode scan.",
                         color = TextSecondary
                     )
                 }
@@ -178,6 +179,33 @@ private fun StudentSummaryRow(row: StudentAttendanceSummary) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(row.student.name, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Text("Roll no. ${row.student.rollNo}", style = MaterialTheme.typography.bodyMedium)
+
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    row.student.rfidUid?.let { uid ->
+                        Text(
+                            text = "NFC: $uid",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentBlue,
+                            modifier = Modifier
+                                .background(AccentBlue.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    row.student.barcode?.let { bc ->
+                        Text(
+                            text = "Barcode: $bc",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentBlueBright,
+                            modifier = Modifier
+                                .background(AccentBlueBright.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
                 LinearProgressIndicator(
                     progress = { if (row.totalSessions == 0) 0f else row.presentCount.toFloat() / row.totalSessions },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp),

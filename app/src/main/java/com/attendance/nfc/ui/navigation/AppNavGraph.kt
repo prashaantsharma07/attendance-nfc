@@ -1,5 +1,6 @@
 package com.attendance.nfc.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -20,8 +21,12 @@ sealed class Screen(val route: String) {
     object Scan : Screen("scan/{classId}") {
         fun createRoute(classId: Long) = "scan/$classId"
     }
-    object Registration : Screen("register/{classId}/{rfid}") {
-        fun createRoute(classId: Long, rfid: String) = "register/$classId/$rfid"
+    object Registration : Screen("register/{classId}?rfid={rfid}&barcode={barcode}") {
+        fun createRoute(classId: Long, rfid: String? = null, barcode: String? = null): String {
+            val rfidParam = rfid?.let { Uri.encode(it) }.orEmpty()
+            val barcodeParam = barcode?.let { Uri.encode(it) }.orEmpty()
+            return "register/$classId?rfid=$rfidParam&barcode=$barcodeParam"
+        }
     }
 }
 
@@ -75,7 +80,10 @@ fun AppNavGraph(
                 onOpenNfcSettings = onOpenNfcSettings,
                 onBack = { navController.popBackStack() },
                 onUnknownCard = { rfid ->
-                    navController.navigate(Screen.Registration.createRoute(classId, rfid))
+                    navController.navigate(Screen.Registration.createRoute(classId = classId, rfid = rfid))
+                },
+                onUnknownBarcode = { barcode ->
+                    navController.navigate(Screen.Registration.createRoute(classId = classId, barcode = barcode))
                 }
             )
         }
@@ -84,14 +92,25 @@ fun AppNavGraph(
             route = Screen.Registration.route,
             arguments = listOf(
                 navArgument("classId") { type = NavType.LongType },
-                navArgument("rfid") { type = NavType.StringType }
+                navArgument("rfid") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = ""
+                },
+                navArgument("barcode") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = ""
+                }
             )
         ) { backStackEntry ->
             val classId = backStackEntry.arguments?.getLong("classId") ?: return@composable
-            val rfid = backStackEntry.arguments?.getString("rfid") ?: return@composable
+            val rfid = backStackEntry.arguments?.getString("rfid")?.takeIf { it.isNotBlank() }
+            val barcode = backStackEntry.arguments?.getString("barcode")?.takeIf { it.isNotBlank() }
             RegistrationScreen(
                 classId = classId,
-                rfid = rfid,
+                initialRfid = rfid,
+                initialBarcode = barcode,
                 repository = repository,
                 onBack = { navController.popBackStack() },
                 onRegistrationComplete = {
