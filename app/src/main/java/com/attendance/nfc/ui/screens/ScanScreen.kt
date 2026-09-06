@@ -146,9 +146,9 @@ fun ScanScreen(
         when (result) {
             is MarkResult.Success -> {
                 val msg = if (result.alreadyMarkedToday) {
-                    "${result.student.name} already marked."
+                    "${result.student.name} (${result.student.rollNo}) already marked."
                 } else {
-                    "Marked ${result.student.name} present (via NFC)"
+                    "Marked ${result.student.name} (${result.student.rollNo}) present (via NFC)"
                 }
                 scanLogs.add(0, ScanLogEntry(
                     message = msg,
@@ -225,9 +225,9 @@ fun ScanScreen(
                                 when (result) {
                                     is MarkResult.Success -> {
                                         val msg = if (result.alreadyMarkedToday) {
-                                            "${result.student.name} already marked."
+                                            "${result.student.name} (${result.student.rollNo}) already marked."
                                         } else {
-                                            "Marked ${result.student.name} present (via Barcode)"
+                                            "Marked ${result.student.name} (${result.student.rollNo}) present (via Barcode)"
                                         }
                                         scanLogs.add(0, ScanLogEntry(
                                             message = msg,
@@ -296,9 +296,9 @@ fun ScanScreen(
                     when (result) {
                         is MarkResult.Success -> {
                             val msg = if (result.alreadyMarkedToday) {
-                                "${result.student.name} already marked."
+                                "${result.student.name} (${result.student.rollNo}) already marked."
                             } else {
-                                "Marked ${result.student.name} present (via Barcode)"
+                                "Marked ${result.student.name} (${result.student.rollNo}) present (via Barcode)"
                             }
                             scanLogs.add(0, ScanLogEntry(
                                 message = msg,

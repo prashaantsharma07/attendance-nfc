@@ -8,7 +8,8 @@ import androidx.room.PrimaryKey
     tableName = "students",
     indices = [
         Index(value = ["rfidUid"], unique = true),
-        Index(value = ["barcode"], unique = true)
+        Index(value = ["barcode"], unique = true),
+        Index(value = ["rollNo"], unique = true)
     ]
 )
 data class Student(

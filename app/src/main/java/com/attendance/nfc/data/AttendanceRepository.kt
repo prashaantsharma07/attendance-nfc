@@ -39,6 +39,8 @@ class AttendanceRepository(db: AppDatabase) {
 
     suspend fun createClass(name: String): Long = classDao.insert(SchoolClass(name = name.trim()))
 
+    suspend fun findStudentByRollNo(rollNo: String): Student? = studentDao.findByRollNo(rollNo.trim())
+
     suspend fun findStudentByRfid(rfid: String): Student? = studentDao.findByRfid(rfid.trim())
 
     suspend fun findStudentByBarcode(barcode: String): Student? = studentDao.findByBarcode(barcode.trim())
@@ -46,19 +48,55 @@ class AttendanceRepository(db: AppDatabase) {
     suspend fun findStudentByIdentifier(identifier: String): Student? =
         studentDao.findByIdentifier(identifier.trim())
 
+    /**
+     * Registers a new student or updates an existing student with matching rollNo.
+     * Handles the vice-versa flow: if a student was registered via Barcode with Roll No,
+     * and later taps a new RFID card, we link that RFID UID to the existing student!
+     */
+    suspend fun registerOrUpdateStudent(
+        name: String,
+        rollNo: String,
+        rfid: String? = null,
+        barcode: String? = null
+    ): Student {
+        val cleanRoll = rollNo.trim()
+        val cleanName = name.trim()
+        val cleanRfid = rfid?.trim()?.ifBlank { null }
+        val cleanBarcode = barcode?.trim()?.ifBlank { null }
+
+        // Find existing student by roll number first (since roll number is the true unique ID of student),
+        // or by RFID / Barcode.
+        val existing = studentDao.findByRollNo(cleanRoll)
+            ?: cleanRfid?.let { studentDao.findByRfid(it) }
+            ?: cleanBarcode?.let { studentDao.findByBarcode(it) }
+
+        return if (existing != null) {
+            val updated = existing.copy(
+                name = if (cleanName.isNotBlank()) cleanName else existing.name,
+                rollNo = if (cleanRoll.isNotBlank()) cleanRoll else existing.rollNo,
+                rfidUid = cleanRfid ?: existing.rfidUid,
+                barcode = cleanBarcode ?: existing.barcode
+            )
+            studentDao.update(updated)
+            updated
+        } else {
+            val newStudent = Student(
+                name = cleanName,
+                rollNo = cleanRoll,
+                rfidUid = cleanRfid,
+                barcode = cleanBarcode
+            )
+            val id = studentDao.insert(newStudent)
+            newStudent.copy(id = id)
+        }
+    }
+
     suspend fun registerStudent(
         name: String,
         rollNo: String,
         rfid: String? = null,
         barcode: String? = null
-    ): Long = studentDao.insert(
-        Student(
-            rfidUid = rfid?.trim()?.ifBlank { null },
-            barcode = barcode?.trim()?.ifBlank { null },
-            name = name.trim(),
-            rollNo = rollNo.trim()
-        )
-    )
+    ): Long = registerOrUpdateStudent(name, rollNo, rfid, barcode).id
 
     suspend fun registerStudent(rfid: String, name: String, rollNo: String): Long =
         registerStudent(name = name, rollNo = rollNo, rfid = rfid, barcode = null)
@@ -69,7 +107,11 @@ class AttendanceRepository(db: AppDatabase) {
      * returns UnknownCard so the UI can route to registration.
      */
     suspend fun scanAndMark(classId: Long, rfid: String): MarkResult {
-        val student = studentDao.findByRfid(rfid.trim()) ?: return MarkResult.UnknownCard
+        val cleanRfid = rfid.trim()
+        val student = studentDao.findByRfid(cleanRfid)
+            ?: studentDao.findByRollNo(cleanRfid)
+            ?: return MarkResult.UnknownCard
+
         val today = todayKey()
         val alreadyMarked = attendanceDao.isPresentOn(classId, student.id, today) > 0
         if (!alreadyMarked) {
@@ -86,15 +128,22 @@ class AttendanceRepository(db: AppDatabase) {
     }
 
     /**
-     * Looks up the scanned barcode. If the student exists, marks them present
-     * for [classId] today (no-op if already marked). If the barcode is unknown,
-     * returns UnknownBarcode so the UI can route to registration.
+     * Looks up the scanned barcode. Since the barcode on student IDs encodes
+     * the Roll Number, this searches by rollNo first, then by barcode field.
+     * If the student exists, marks them present for [classId] today.
+     * If the student is unknown, returns UnknownBarcode.
      */
     suspend fun scanAndMarkBarcode(classId: Long, barcode: String): MarkResult {
         val cleanBarcode = barcode.trim()
-        val student = studentDao.findByBarcode(cleanBarcode)
-            ?: studentDao.findByRfid(cleanBarcode)
+        val student = studentDao.findByRollNo(cleanBarcode)
+            ?: studentDao.findByBarcode(cleanBarcode)
+            ?: studentDao.findByIdentifier(cleanBarcode)
             ?: return MarkResult.UnknownBarcode(cleanBarcode)
+
+        // If student exists but does not have the barcode field linked, associate it
+        if (student.barcode.isNullOrBlank() || !student.barcode.equals(cleanBarcode, ignoreCase = true)) {
+            studentDao.update(student.copy(barcode = cleanBarcode))
+        }
 
         val today = todayKey()
         val alreadyMarked = attendanceDao.isPresentOn(classId, student.id, today) > 0
@@ -111,7 +160,7 @@ class AttendanceRepository(db: AppDatabase) {
         return MarkResult.Success(student, alreadyMarked, method = "Barcode")
     }
 
-    /** Registers a student with RFID and/or Barcode, and marks present for [classId]. */
+    /** Registers or links a student with RFID and/or Barcode, and marks present for [classId]. */
     suspend fun registerAndMark(
         classId: Long,
         name: String,
@@ -119,22 +168,19 @@ class AttendanceRepository(db: AppDatabase) {
         rfid: String? = null,
         barcode: String? = null
     ): Student {
-        val id = registerStudent(name = name, rollNo = rollNo, rfid = rfid, barcode = barcode)
-        val student = Student(
-            id = id,
-            rfidUid = rfid?.trim()?.ifBlank { null },
-            barcode = barcode?.trim()?.ifBlank { null },
-            name = name.trim(),
-            rollNo = rollNo.trim()
-        )
-        attendanceDao.insert(
-            AttendanceRecord(
-                classId = classId,
-                studentId = id,
-                dateKey = todayKey(),
-                timestamp = System.currentTimeMillis()
+        val student = registerOrUpdateStudent(name = name, rollNo = rollNo, rfid = rfid, barcode = barcode)
+        val today = todayKey()
+        val alreadyMarked = attendanceDao.isPresentOn(classId, student.id, today) > 0
+        if (!alreadyMarked) {
+            attendanceDao.insert(
+                AttendanceRecord(
+                    classId = classId,
+                    studentId = student.id,
+                    dateKey = today,
+                    timestamp = System.currentTimeMillis()
+                )
             )
-        )
+        }
         return student
     }
 

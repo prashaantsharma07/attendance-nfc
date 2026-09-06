@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Student::class, SchoolClass::class, AttendanceRecord::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -43,6 +43,13 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE students_new RENAME TO students")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_students_rfidUid ON students(rfidUid)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_students_barcode ON students(barcode)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_students_rollNo ON students(rollNo)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_students_rollNo ON students(rollNo)")
             }
         }
 
@@ -53,7 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "attendance.db"
                 )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build().also { INSTANCE = it }
             }
